@@ -8,8 +8,12 @@ import { authOptions } from '../auth/[...nextauth]/route';
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "ไม่ได้รับอนุญาต" },
+        { status: 401 }
+      );
     }
 
     const { searchParams } = new URL(request.url);
@@ -64,8 +68,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Error fetching item types:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error("Error fetching item types:", error);
+    return NextResponse.json(
+      { error: "เกิดข้อผิดพลาดในการดึงข้อมูลประเภทรายการ" },
+      { status: 500 }
+    );
   }
 }
 
@@ -73,17 +80,28 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "ไม่ได้รับอนุญาต" },
+        { status: 401 }
+      );
+    }
+
+    // ตรวจสอบว่าเป็น admin หรือไม่
+    if ((session.user as any).role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "คุณไม่มีสิทธิ์ในการสร้างประเภทรายการ" },
+        { status: 403 }
+      );
     }
 
     const body = await request.json();
-    const { name } = body;
+    const { name, description } = body;
 
-    // ตรวจสอบข้อมูลที่จำเป็น
     if (!name) {
       return NextResponse.json(
-        { error: 'Item type name is required' },
+        { error: "กรุณาระบุชื่อประเภทรายการ" },
         { status: 400 }
       );
     }
@@ -117,7 +135,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(newItemType, { status: 201 });
   } catch (error) {
-    console.error('Error creating item type:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error("Error creating item type:", error);
+    return NextResponse.json(
+      { error: "เกิดข้อผิดพลาดในการสร้างประเภทรายการ" },
+      { status: 500 }
+    );
   }
 } 

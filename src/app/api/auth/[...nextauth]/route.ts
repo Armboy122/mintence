@@ -9,6 +9,23 @@ import { Adapter } from "next-auth/adapters";
 const prisma = new PrismaClient();
 const redis = new Redis(process.env.REDIS_URL as string);
 
+// ฟังก์ชันสำหรับการเก็บ session ใน Redis
+async function setRedisSession(sessionToken: string, session: any, maxAge: number) {
+  await redis.set(`session:${sessionToken}`, JSON.stringify(session), 'EX', maxAge);
+}
+
+// ฟังก์ชันสำหรับการดึง session จาก Redis
+async function getRedisSession(sessionToken: string) {
+  const session = await redis.get(`session:${sessionToken}`);
+  if (!session) return null;
+  return JSON.parse(session);
+}
+
+// ฟังก์ชันสำหรับการลบ session จาก Redis
+async function deleteRedisSession(sessionToken: string) {
+  await redis.del(`session:${sessionToken}`);
+}
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
   session: {
@@ -79,8 +96,23 @@ export const authOptions: NextAuthOptions = {
         session.user.employeeId = token.employeeId as string;
         session.user.departmentId = token.departmentId as string;
         session.user.departmentName = token.departmentName as string;
+        
+        // เก็บ session ใน Redis
+        await setRedisSession(
+          token.jti as string,
+          session,
+          authOptions.session?.maxAge || 30 * 24 * 60 * 60
+        );
       }
       return session;
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      // ลบ session จาก Redis เมื่อ sign out
+      if (token?.jti) {
+        await deleteRedisSession(token.jti as string);
+      }
     },
   },
   pages: {
